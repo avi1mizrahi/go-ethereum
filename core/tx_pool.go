@@ -20,7 +20,9 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"os"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -805,6 +807,29 @@ func (pool *TxPool) journalTx(from common.Address, tx *types.Transaction) {
 	}
 }
 
+func txToString(tx *types.Transaction) string {
+	txString := strconv.FormatInt(time.Now().Unix(), 10) + ","
+	txString += tx.Hash().String() + ","
+	txString += tx.Size().String() + ","
+	txString += tx.From() + ","
+	txString += tx.To().String() + ","
+	txString += string(tx.Data())
+	return txString
+}
+
+func mempoolDump(tx *types.Transaction) {
+	fd, error := os.Open("mempool_history")
+	if error != nil {
+		panic(error)
+	}
+	defer fd.Close()
+	txString := txToString(tx)
+	_, error = fd.WriteString(txString + "\n")
+	if error != nil {
+		panic(error)
+	}
+}
+
 // promoteTx adds a transaction to the pending (processable) list of transactions
 // and returns whether it was inserted or an older was better.
 //
@@ -817,6 +842,7 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	list := pool.pending[addr]
 
 	inserted, old := list.Add(tx, pool.config.PriceBump)
+	mempoolDump(tx)
 	if !inserted {
 		// An older transaction was better, discard this
 		pool.all.Remove(hash)
@@ -1005,6 +1031,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 	if pool.locals.contains(addr) {
 		localGauge.Dec(1)
 	}
+	mempoolDump(tx)
 	// Remove the transaction from the pending lists and reset the account nonce
 	if pending := pool.pending[addr]; pending != nil {
 		if removed, invalids := pending.Remove(tx); removed {

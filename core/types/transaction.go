@@ -87,6 +87,13 @@ type TxData interface {
 	setSignatureValues(chainID, v, r, s *big.Int)
 }
 
+func (tx *Transaction) From() string {
+	if from := tx.from.Load(); from != nil {
+		return from.(common.Address).String()
+	}
+	return ""
+}
+
 // EncodeRLP implements rlp.Encoder
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	if tx.Type() == LegacyTxType {
