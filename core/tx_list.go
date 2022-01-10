@@ -310,6 +310,7 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Tran
 	if gas := tx.Gas(); l.gascap < gas {
 		l.gascap = gas
 	}
+	MempoolDump(tx, "Add-tx_list.go", false)
 	return true, old
 }
 
@@ -379,6 +380,7 @@ func (l *txList) Remove(tx *types.Transaction) (bool, types.Transactions) {
 	if l.strict {
 		return true, l.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() > nonce })
 	}
+	MempoolDump(tx, "Remove-tx_list.go", true)
 	return true, nil
 }
 

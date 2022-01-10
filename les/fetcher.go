@@ -159,6 +159,7 @@ type lightFetcher struct {
 // newLightFetcher creates a light fetcher instance.
 func newLightFetcher(chain *light.LightChain, engine consensus.Engine, peers *serverPeerSet, ulc *ulc, chaindb ethdb.Database, reqDist *requestDistributor, syncFn func(p *serverPeer)) *lightFetcher {
 	// Construct the fetcher by offering all necessary APIs
+	log.Info("#################Hello - In newLightFetcher")
 	validator := func(header *types.Header) error {
 		// Disable seal verification explicitly if we are running in ulc mode.
 		return engine.VerifyHeader(chain, header, ulc == nil)
@@ -193,12 +194,14 @@ func newLightFetcher(chain *light.LightChain, engine consensus.Engine, peers *se
 }
 
 func (f *lightFetcher) start() {
+	log.Info("#################Hello - In start")
 	f.wg.Add(1)
 	f.fetcher.Start()
 	go f.mainloop()
 }
 
 func (f *lightFetcher) stop() {
+	log.Info("#################Hello - In stop")
 	close(f.closeCh)
 	f.fetcher.Stop()
 	f.wg.Wait()
@@ -206,6 +209,14 @@ func (f *lightFetcher) stop() {
 
 // registerPeer adds an new peer to the fetcher's peer set
 func (f *lightFetcher) registerPeer(p *serverPeer) {
+	log.Info("#################Hello - In registerPeer")
+	txhashes := []common.Hash{}
+	if err := p.requestTxStatus(1, txhashes); err != nil {
+		log.Info("#################Hello - Error in requesting TX status")
+	}
+	log.Info("#################Hello - Success")
+	log.Info("#################Hello - Len: " + string(len(txhashes)))
+	log.Info("#################Hello - First element: " + txhashes[0].String())
 	f.plock.Lock()
 	defer f.plock.Unlock()
 
@@ -255,6 +266,7 @@ func (f *lightFetcher) forEachPeer(check func(id enode.ID, p *fetcherPeer) bool)
 //   If the local chain lags too much, then the fetcher will enter "synnchronise"
 //   mode to retrieve missing headers in batch.
 func (f *lightFetcher) mainloop() {
+	log.Info("#################Hello - In mainLoop")
 	defer f.wg.Done()
 
 	var (

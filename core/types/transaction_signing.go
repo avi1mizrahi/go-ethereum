@@ -36,6 +36,11 @@ type sigCache struct {
 	from   common.Address
 }
 
+func (s *sigCache) GetFrom() common.Address {
+	return s.from
+}
+
+
 // MakeSigner returns a Signer based on the given chain config and block number.
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer

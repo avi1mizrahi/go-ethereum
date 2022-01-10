@@ -755,6 +755,44 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	return replaced, nil
 }
 
+func txToString(tx *types.Transaction, status string, validTx bool) string {
+	txString := status + ","
+	txString += strconv.FormatInt(tx.GetTime().Unix(), 10) + ","
+	txString += tx.Hash().String() + ","
+	txString += tx.Size().String() + ","
+	//if validTx {
+	//	txString += tx.From().String() + ","
+	//	txString += tx.To().String() + ","
+	//}
+
+	//txString += string(tx.Data())
+	return txString
+}
+
+var counterBeforeFlush uint64 = 0
+const FLUSH_RATE uint64 = 1000
+var txsBeforeFlush[FLUSH_RATE] string
+
+func MempoolDump(tx *types.Transaction, status string, validTx bool) {
+	if counterBeforeFlush % FLUSH_RATE == 0 {
+		fd, err := os.OpenFile("mempool_history", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0777)
+		if err != nil {
+			panic(err)
+		}
+		defer fd.Close()
+		for txCount := 0; uint64(txCount) < FLUSH_RATE; txCount++ {
+			_, err = fd.WriteString(txsBeforeFlush[txCount])
+			if err != nil {
+				panic(err)
+			}
+		}
+		log.Info("=================Hello - Flushed Txs to file: " + strconv.FormatUint(counterBeforeFlush, 10))
+	}
+	txString := txToString(tx, status, validTx) + "\n"
+	txsBeforeFlush[counterBeforeFlush % FLUSH_RATE] = txString
+	counterBeforeFlush++
+}
+
 // enqueueTx inserts a new transaction into the non-executable transaction queue.
 //
 // Note, this method assumes the pool lock is held!
@@ -770,6 +808,8 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local boo
 		queuedDiscardMeter.Mark(1)
 		return false, ErrReplaceUnderpriced
 	}
+	MempoolDump(tx, "enqueueTX-tx_pool.go", true)
+	log.Info("=================Hello - tx_pool.go - enqueueTX - finished dump")
 	// Discard any previous transaction and mark this
 	if old != nil {
 		pool.all.Remove(old.Hash())
@@ -807,42 +847,20 @@ func (pool *TxPool) journalTx(from common.Address, tx *types.Transaction) {
 	}
 }
 
-func txToString(tx *types.Transaction) string {
-	txString := strconv.FormatInt(time.Now().Unix(), 10) + ","
-	txString += tx.Hash().String() + ","
-	txString += tx.Size().String() + ","
-	txString += tx.From() + ","
-	txString += tx.To().String() + ","
-	txString += string(tx.Data())
-	return txString
-}
-
-func mempoolDump(tx *types.Transaction) {
-	fd, error := os.Open("mempool_history")
-	if error != nil {
-		panic(error)
-	}
-	defer fd.Close()
-	txString := txToString(tx)
-	_, error = fd.WriteString(txString + "\n")
-	if error != nil {
-		panic(error)
-	}
-}
-
 // promoteTx adds a transaction to the pending (processable) list of transactions
 // and returns whether it was inserted or an older was better.
 //
 // Note, this method assumes the pool lock is held!
 func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.Transaction) bool {
 	// Try to insert the transaction into the pending queue
+	log.Info("=================Hello - tx_pool.go - promoteTX")
 	if pool.pending[addr] == nil {
 		pool.pending[addr] = newTxList(true)
 	}
 	list := pool.pending[addr]
 
 	inserted, old := list.Add(tx, pool.config.PriceBump)
-	mempoolDump(tx)
+	MempoolDump(tx, "promoteTX-tx_pool.go", true)
 	if !inserted {
 		// An older transaction was better, discard this
 		pool.all.Remove(hash)
@@ -922,6 +940,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	for i, tx := range txs {
 		// If the transaction is known, pre-set the error slot
 		if pool.all.Get(tx.Hash()) != nil {
+			MempoolDump(tx, "addTXs-tx_pool.go-ErrAlreadyKnown", false)
 			errs[i] = ErrAlreadyKnown
 			knownTxMeter.Mark(1)
 			continue
@@ -931,10 +950,12 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		// obtaining lock
 		_, err := types.Sender(pool.signer, tx)
 		if err != nil {
+			MempoolDump(tx, "addTXs-tx_pool.go-ErrInvalidSender", false)
 			errs[i] = ErrInvalidSender
 			invalidTxMeter.Mark(1)
 			continue
 		}
+		MempoolDump(tx, "addTXs-tx_pool.go", true)
 		// Accumulate all unknown transactions for deeper processing
 		news = append(news, tx)
 	}
@@ -973,6 +994,9 @@ func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) ([]error,
 		errs[i] = err
 		if err == nil && !replaced {
 			dirty.addTx(tx)
+		}
+		if err != nil {
+			MempoolDump(tx, "addTxsLocked-tx_pool.go-" + err.Error(), false)
 		}
 	}
 	validTxMeter.Mark(int64(len(dirty.accounts)))
@@ -1016,6 +1040,7 @@ func (pool *TxPool) Has(hash common.Hash) bool {
 // removeTx removes a single transaction from the queue, moving all subsequent
 // transactions back to the future queue.
 func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
+	log.Info("=================Hello - tx_pool.go - removeTX")
 	// Fetch the transaction we wish to delete
 	tx := pool.all.Get(hash)
 	if tx == nil {
@@ -1031,7 +1056,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 	if pool.locals.contains(addr) {
 		localGauge.Dec(1)
 	}
-	mempoolDump(tx)
+	MempoolDump(tx, "removeTX-tx_pool.go", true)
 	// Remove the transaction from the pending lists and reset the account nonce
 	if pending := pool.pending[addr]; pending != nil {
 		if removed, invalids := pending.Remove(tx); removed {

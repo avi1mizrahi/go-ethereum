@@ -181,6 +181,7 @@ type TxFetcher struct {
 // NewTxFetcher creates a transaction fetcher to retrieve transaction
 // based on hash announcements.
 func NewTxFetcher(hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error) *TxFetcher {
+	log.Info("=================Hello - In NewTxFetcher")
 	return NewTxFetcherForTests(hasTx, addTxs, fetchTxs, mclock.System{}, nil)
 }
 
@@ -263,6 +264,8 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 // re-shedule missing transactions as soon as possible.
 func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) error {
 	// Keep track of all the propagated transactions
+	//log.Info("=================Hello - In Enqueue")
+	//log.Info("=================Hello - Len: " + string(len(txs)))
 	if direct {
 		txReplyInMeter.Mark(int64(len(txs)))
 	} else {
@@ -333,6 +336,7 @@ func (f *TxFetcher) Drop(peer string) error {
 // Start boots up the announcement based synchroniser, accepting and processing
 // hash notifications and block fetches until termination requested.
 func (f *TxFetcher) Start() {
+	log.Info("=================Hello - In Start")
 	go f.loop()
 }
 
@@ -343,6 +347,7 @@ func (f *TxFetcher) Stop() {
 }
 
 func (f *TxFetcher) loop() {
+	log.Info("=================Hello - In Loop")
 	var (
 		waitTimer    = new(mclock.Timer)
 		timeoutTimer = new(mclock.Timer)
