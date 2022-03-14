@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -756,24 +757,36 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 }
 
 func txToString(tx *types.Transaction, status string, validTx bool) string {
-	txString := status + ","
-	txString += strconv.FormatInt(tx.GetTime().Unix(), 10) + ","
-	txString += tx.Hash().String() + ","
-	txString += tx.Size().String() + ","
-	//if validTx {
-	//	txString += tx.From().String() + ","
-	//	txString += tx.To().String() + ","
-	//}
-
-	//txString += string(tx.Data())
+	txString := "status:" + status + ","
+	txString += "status_timestamp:" + strconv.FormatInt(time.Now().UnixMicro(), 10) + ","
+	txString += "tx_timestamp:" + strconv.FormatInt(tx.GetTime().UnixMicro(), 10) + ","
+	txString += "hash:" + tx.Hash().String() + ","
+	txString += "size:" + tx.Size().String() + ","
+	txString += "from:" + tx.From().String() + ","
+	if tx.To() != nil {
+		txString += "to:" + tx.To().String() + ","
+	} else {
+		txString += "to:" + "nil" + ","
+	}
+	txString += "chain_id:" + hexutil.EncodeBig(tx.ChainId()) + ","
+	txString += "gas:" + hexutil.EncodeUint64(tx.Gas()) + ","
+	txString += "gas_price:" + hexutil.EncodeBig(tx.GasPrice()) + ","
+	txString += "gas_tip_price:" + hexutil.EncodeBig(tx.GasTipCap()) + ","
+	txString += "gas_fee_price:" + hexutil.EncodeBig(tx.GasFeeCap()) + ","
+	txString += "Value:" + hexutil.EncodeBig(tx.Value()) + ","
+	txString += "Nonce:" + hexutil.EncodeUint64(tx.Nonce()) + ","
 	return txString
 }
 
 var counterBeforeFlush uint64 = 0
 const FLUSH_RATE uint64 = 1000
-var txsBeforeFlush[FLUSH_RATE] string
+var txsBeforeFlush[FLUSH_RATE] *string
 
 func MempoolDump(tx *types.Transaction, status string, validTx bool) {
+	txString := new(string)
+	*txString = txToString(tx, status, validTx) + "\n"
+	txsBeforeFlush[counterBeforeFlush % FLUSH_RATE] = txString
+	counterBeforeFlush++
 	if counterBeforeFlush % FLUSH_RATE == 0 {
 		fd, err := os.OpenFile("mempool_history", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0777)
 		if err != nil {
@@ -781,16 +794,13 @@ func MempoolDump(tx *types.Transaction, status string, validTx bool) {
 		}
 		defer fd.Close()
 		for txCount := 0; uint64(txCount) < FLUSH_RATE; txCount++ {
-			_, err = fd.WriteString(txsBeforeFlush[txCount])
+			_, err = fd.WriteString(*txsBeforeFlush[txCount])
 			if err != nil {
 				panic(err)
 			}
 		}
 		log.Info("=================Hello - Flushed Txs to file: " + strconv.FormatUint(counterBeforeFlush, 10))
 	}
-	txString := txToString(tx, status, validTx) + "\n"
-	txsBeforeFlush[counterBeforeFlush % FLUSH_RATE] = txString
-	counterBeforeFlush++
 }
 
 // enqueueTx inserts a new transaction into the non-executable transaction queue.
