@@ -16,9 +16,10 @@ FROM alpine:latest
 
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
+COPY start-geth.sh .
 
 EXPOSE 8545 8546 30303 30303/udp
-ENTRYPOINT ["geth"]
+ENTRYPOINT ["/bin/sh", "start-geth.sh"]
 
 # Add some metadata labels to help programatic image consumption
 ARG COMMIT=""
